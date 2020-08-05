@@ -1,0 +1,29 @@
+{
+    "properties": {
+        ""
+        "sample": {
+            "default": "20-90206-1",
+            "title": "",
+            "type": "string"
+        },
+        "assay": {
+            "default": "test_assay",
+            "title": "",
+            "type": "string"
+        },
+        "ref_build": {
+            "default": "hg38"
+            "title": "",
+            "type": "string"
+            "enum": [
+                "hg38"
+              ]
+        }
+    },
+    "required": [
+        "sample", 
+        "assay",
+        "ref_build"
+    ],
+    "type": "object"
+}
