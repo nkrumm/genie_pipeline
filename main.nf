@@ -109,7 +109,7 @@ process map_reads {
 process merge_and_markdups {
     label 'gatk_merge_and_markdups'
     tag "${sample_id}"
-
+    echo true
     input:
         tuple sample_id, file(bams) from readgroup_bams_ch.groupTuple()
     output:
@@ -118,6 +118,9 @@ process merge_and_markdups {
         inputs = bams.collect{"-I ${it}"}.join(' ')
 
         """
+        hostname
+        cat /etc/hosts
+        
         gatk --java-options "-Xmx${task.memory.toGiga()}g" \
         MarkDuplicatesSpark \
         ${inputs} \
