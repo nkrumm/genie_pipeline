@@ -99,7 +99,7 @@ process map_reads {
         -K 100000000 \
         -t ${task.cpus}  \
         ${ref_fasta} *.fastq.gz 2> log.txt \
-        | samtools sort -n \
+        | samtools sort -n -m4G \
           - -o ${config.readgroup_id}.bam
 
         """
