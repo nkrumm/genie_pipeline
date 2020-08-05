@@ -1,48 +1,54 @@
 
-import groovy.json.JsonOutput;
+
+// parameters; default is for test data
+def sample               = params.sample_id ?: "20-90206-1"
+def assay                = params.assay ?: 'test_assay'
+def ref_build            = params.genome ?: 'hg38' 
+
+// base paths -- typically defined in config
+def ref_base             = params.ref_base
+def assay_base           = params.assay_base
+def sample_base          = params.sample_base
+
+assert params.assays[assay].compatible_references.contains(ref_build)
 
 
-params.sample_id = "20-90206-1"
-params.sample_base = "test_data" //"s3://ncgl-prod.sample-bucket"
-params.genome = 'hg38'
-params.assay = 'test_assay'
+println("Sample: " + sample)
+println("Assay: " + assay)
+println("Reference: " + ref_build)
+println("Reference Base: " + ref_base)
+println("Assay Base: " + assay_base)
+println("Sample Base: " + sample_base)
+
 // assay-specific files
-// targets_bed = file(params.assays[params.assay].genomes[ref_build].targets_bed, checkIfExists: true)
-
-
-// genome
-ref_build          = params.genome
-ref_base           = params.ref_base
-assay_base         = params.assay_base
+assay_intervals      = Channel.fromPath("${assay_base}/${params.assays[assay].intervals}").collect()
 
 // reference sequence
-ref_fasta          = file("${ref_base}/${params.references[ref_build].fasta}", checkIfExists: true)
-ref_fasta_fai      = file("${ref_base}/${params.references[ref_build].fastaFai}", checkIfExists: true)
+ref_fasta            = file("${ref_base}/${params.references[ref_build].fasta}", checkIfExists: true)
+ref_fasta_fai        = file("${ref_base}/${params.references[ref_build].fastaFai}", checkIfExists: true)
 
 // BWA index for alignment
-bwa_index          = Channel.fromPath("${ref_base}/${params.references[ref_build].bwaIndex}", checkIfExists: true).collect()
+bwa_index            = Channel.fromPath("${ref_base}/${params.references[ref_build].bwaIndex}", checkIfExists: true).collect()
 
 // Files for base recalibration
-ref_fasta_dict     = file("${ref_base}/${params.references[ref_build].dict}", checkIfExists: true)
-dbsnp              = file("${ref_base}/${params.references[ref_build].dbsnp}", checkIfExists: true)
-dbsnp_index        = file("${ref_base}/${params.references[ref_build].dbsnpIndex}", checkIfExists: true)
-known_indels       = Channel.fromPath("${ref_base}/${params.references[ref_build].knownIndels}", checkIfExists: true).collect()
-known_indels_index = Channel.fromPath("${ref_base}/${params.references[ref_build].knownIndelsIndex}", checkIfExists: true).collect()
-
-// variant calling
-assay_intervals    = Channel.fromPath("${assay_base}/${params.assays[params.assay].intervals}").collect()
+ref_fasta_dict       = file("${ref_base}/${params.references[ref_build].dict}", checkIfExists: true)
+dbsnp                = file("${ref_base}/${params.references[ref_build].dbsnp}", checkIfExists: true)
+dbsnp_index          = file("${ref_base}/${params.references[ref_build].dbsnpIndex}", checkIfExists: true)
+known_indels         = Channel.fromPath("${ref_base}/${params.references[ref_build].knownIndels}", checkIfExists: true).collect()
+known_indels_index   = Channel.fromPath("${ref_base}/${params.references[ref_build].knownIndelsIndex}", checkIfExists: true).collect()
 
 // annotation
 snpeff_db            = Channel.fromPath("${ref_base}/${params.references[ref_build].snpEffDb}").collect()
 snpeff_config        = file("${ref_base}/${params.references[ref_build].snpEffConfig}")
-vcfanno_config_files = Channel.fromPath("${assay_base}/${params.assays[params.assay].config}", checkIfExists: true).collect()
+vcfanno_config_files = Channel.fromPath("${assay_base}/${params.assays[assay].annotationConfig}", checkIfExists: true).collect()
 vcfanno_ref_files    = Channel.fromPath("${ref_base}/Homo_sapiens/GATK/GRCh38/Annotation/{clinvar,gnomAD,OMIM,CPDX,HGMD}/*").collect()
 
-
 // xls report generation
-xls_config           = file("config/xls_format.yaml")
+xls_config           = file("${assay_base}/${params.assays[assay]}.xlsConfig")
 
-Channel.fromPath("${params.sample_base}/${params.sample_id}/exome/libraries/**.fastq.gz")
+
+
+Channel.fromPath("${params.sample_base}/${sample}/exome/libraries/**.fastq.gz")
     .map { fastq -> 
         def (filename, readgroup_id, library_id, _f1, _f2, sample_id, rest) = fastq.toString().tokenize('/').reverse() // tokenize path
         return [readgroup_id, fastq]
@@ -60,9 +66,6 @@ Channel.fromPath("${params.sample_base}/${params.sample_id}/exome/libraries/**.f
         return tuple(readgroup_id, config, fastqs)
     }
     .set { mapping_source_fastqs_ch }
-    //.subscribe {
-        //v -> println JsonOutput.prettyPrint(JsonOutput.toJson(v[1]))
-    //}
 
 
 // alignment of individual read groups (and sort by *queryname*)
