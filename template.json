@@ -1,6 +1,5 @@
 {
     "properties": {
-        ""
         "sample": {
             "default": "20-90206-1",
             "title": "",
@@ -12,9 +11,9 @@
             "type": "string"
         },
         "ref_build": {
-            "default": "hg38"
+            "default": "hg38",
             "title": "",
-            "type": "string"
+            "type": "string",
             "enum": [
                 "hg38"
               ]
