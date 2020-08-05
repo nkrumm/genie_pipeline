@@ -13,13 +13,6 @@ def sample_base          = params.sample_base
 assert params.assays[assay].compatible_references.contains(ref_build)
 
 
-println("Sample: " + sample)
-println("Assay: " + assay)
-println("Reference: " + ref_build)
-println("Reference Base: " + ref_base)
-println("Assay Base: " + assay_base)
-println("Sample Base: " + sample_base)
-
 // assay-specific files
 assay_intervals      = Channel.fromPath("${assay_base}/${params.assays[assay].intervals}").collect()
 
@@ -44,8 +37,17 @@ vcfanno_config_files = Channel.fromPath("${assay_base}/${params.assays[assay].an
 vcfanno_ref_files    = Channel.fromPath("${ref_base}/Homo_sapiens/GATK/GRCh38/Annotation/{clinvar,gnomAD,OMIM,CPDX,HGMD}/*").collect()
 
 // xls report generation
-xls_config           = file("${assay_base}/${params.assays[assay]}.xlsConfig")
+xls_config           = file("${assay_base}/${params.assays[assay].xlsConfig}", checkIfExists: true)
 
+
+// Print inputs/config
+println("Sample: " + sample)
+println("Assay: " + assay)
+println("Reference: " + ref_build)
+println("Reference Base: " + ref_base)
+println("Assay Base: " + assay_base)
+println("Sample Base: " + sample_base)
+println('XLS Config: ' + xls_config)
 
 
 Channel.fromPath("${params.sample_base}/${sample}/exome/libraries/**.fastq.gz")
@@ -229,7 +231,7 @@ process strelka2 {
         path "intervals/*" from assay_intervals
 
     output:
-        tuple sample_id, file("${sample_id}.strelka.vcf.gz"), file("${sample_id}.strelka.vcf.gz.tbi") into strelka2_out
+        tuple val(sample_id), file("${sample_id}.strelka.vcf.gz"), file("${sample_id}.strelka.vcf.gz.tbi"), val("strelka") into strelka2_out
 
     script:
         """
@@ -264,7 +266,7 @@ process genotype_gvcf {
         path "intervals/*" from assay_intervals
 
     output:
-        tuple sample_id, file("${sample_id}.gatk.vcf.gz"), file("${sample_id}.gatk.vcf.gz.tbi") into genotype_gvcf_out
+        tuple val(sample_id), file("${sample_id}.gatk.vcf.gz"), file("${sample_id}.gatk.vcf.gz.tbi"), val("gatk") into genotype_gvcf_out
 
     script:
         """
@@ -290,12 +292,12 @@ process normalize_vcf {
     tag "${sample_id}"
     
     input:
-        tuple sample_id, file(vcf), file(ix) from normalize_vcf_in
+        tuple val(sample_id), file(vcf), file(ix), val(variant_caller) from normalize_vcf_in
         path ref_fasta
         path ref_fasta_fai
         path ref_fasta_dict
     output:
-        tuple sample_id, file("${vcf.baseName}.normalized.vcf.gz"), file("${vcf.baseName}.normalized.vcf.gz.tbi") into normalize_vcf_out
+        tuple sample_id, file("${vcf.baseName}.normalized.vcf.gz"), file("${vcf.baseName}.normalized.vcf.gz.tbi"), variant_caller into normalize_vcf_out
     shell:
         """
         bcftools norm ${vcf} --fasta-ref ${ref_fasta} \
@@ -320,13 +322,13 @@ process annotation {
 
     publishDir "publish/${sample_id}/", mode: 'copy'
     input:
-        tuple sample_id, file(vcf), file(ix) from normalize_vcf_out
+        tuple val(sample_id), file(vcf), file(ix), val(variant_caller) from normalize_vcf_out
         path snpeff_config from snpeff_config
         path "snpeff/*" from snpeff_db
         path vcfanno_config_files
         path vcfanno_ref_files
     output:
-        tuple sample_id, file("${sample_id}.annotated.vcf") into annotated_vcf_out
+        tuple val(sample_id), file("${sample_id}.${variant_caller}.annotated.vcf"), val(variant_caller) into annotated_vcf_out
 
     shell:
     """
@@ -346,7 +348,7 @@ process annotation {
     | vcfanno_linux64 -lua custom.lua omim_annotation.toml /dev/stdin \
     | vcfanno_linux64 -lua custom.lua cpdx_annotation.toml /dev/stdin \
     | vcfanno_linux64 -lua custom.lua hgmd_annotation.toml /dev/stdin \
-    > ${sample_id}.annotated.vcf
+    > ${sample_id}.${variant_caller}.annotated.vcf
     """
 }
 
@@ -357,14 +359,14 @@ process make_xls {
     publishDir "publish/${sample_id}", mode: 'copy'
 
     input:
-        tuple sample_id, file(vcf) from annotated_vcf_out
+        tuple val(sample_id), file(vcf), val(variant_caller) from annotated_vcf_out
         path config from xls_config
     output:
-        tuple sample_id, file("${sample_id}.report.xls")
+        tuple sample_id, file("${sample_id}.${variant_caller}.report.xls")
 
     shell:
     """
-    vcf2xlsx.py ${vcf} ${config} ${sample_id}.report.xls
+    vcf2xlsx.py ${vcf} ${config} ${sample_id}.${variant_caller}.report.xlsx
     """
 }
 //process slivar {
