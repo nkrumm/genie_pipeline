@@ -120,6 +120,7 @@ process merge_and_markdups {
         """
         hostname
         cat /etc/hosts
+        cat /etc/resolv.conf 
         
         gatk --java-options "-Xmx${task.memory.toGiga()}g" \
         MarkDuplicatesSpark \
