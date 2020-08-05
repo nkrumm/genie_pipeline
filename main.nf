@@ -120,6 +120,8 @@ process merge_and_markdups {
         """
         hostname
         cat /etc/hosts
+        
+        echo "\nsearch us-west-2.compute.internal" >> /etc/resolv.conf 
         cat /etc/resolv.conf 
         
         gatk --java-options "-Xmx${task.memory.toGiga()}g" \
