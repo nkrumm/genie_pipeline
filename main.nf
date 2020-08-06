@@ -364,7 +364,7 @@ process make_xls {
         tuple val(sample_id), file(vcf), val(variant_caller) from annotated_vcf_out
         path config from xls_config
     output:
-        tuple sample_id, file("${sample_id}.${variant_caller}.report.xls")
+        tuple sample_id, file("${sample_id}.${variant_caller}.report.xlsx")
 
     shell:
     """
