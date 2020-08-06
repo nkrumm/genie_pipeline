@@ -326,7 +326,7 @@ process annotation {
     input:
         tuple val(sample_id), file(vcf), file(ix), val(variant_caller) from normalize_vcf_out
         path snpeff_config from snpeff_config
-        path "snpeff/*" from snpeff_db
+        path "data/*" from snpeff_db
         path vcfanno_config_files
         path vcfanno_ref_files
     output:
