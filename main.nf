@@ -1,4 +1,4 @@
-
+import java.nio.file.Paths
 
 // parameters; default is for test data
 def sample               = params.sample_id ?: "20-90206-1"
@@ -9,6 +9,7 @@ def ref_build            = params.genome ?: 'hg38'
 def ref_base             = params.ref_base
 def assay_base           = params.assay_base
 def sample_base          = params.sample_base
+def publish_path         = Paths.get(params.publish_base, sample)
 
 assert params.assays[assay].compatible_references.contains(ref_build)
 
@@ -48,7 +49,7 @@ println("Reference Base: " + ref_base)
 println("Assay Base: " + assay_base)
 println("Sample Base: " + sample_base)
 println('XLS Config: ' + xls_config)
-
+println('Publish path: ' + publish_path)
 
 Channel.fromPath("${params.sample_base}/${sample}/exome/libraries/**.fastq.gz")
     .map { fastq -> 
@@ -322,7 +323,7 @@ process annotation {
     label 'annotation'
     tag "${sample_id}"
 
-    publishDir "publish/${sample_id}/", mode: 'copy'
+    publishDir publish_base, overwrite: true
     input:
         tuple val(sample_id), file(vcf), file(ix), val(variant_caller) from normalize_vcf_out
         path snpeff_config from snpeff_config
@@ -358,7 +359,7 @@ process make_xls {
     label 'annotation'
     tag "${sample_id}"
 
-    publishDir "publish/${sample_id}", mode: 'copy'
+    publishDir publish_base, overwrite: true
 
     input:
         tuple val(sample_id), file(vcf), val(variant_caller) from annotated_vcf_out
