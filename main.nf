@@ -336,7 +336,7 @@ process annotation {
     """
     # basic function annotation (ANN field)
     java -Xmx4g -jar /snpEff/snpEff.jar \
-        -c snpeff.config \
+        -c ${snpeff_config} \
         -dataDir data/ \
         -noStats \
         -noDownload \
