@@ -1,4 +1,3 @@
-import java.nio.file.Paths
 
 // parameters; default is for test data
 def sample               = params.sample_id ?: "20-90206-1"
@@ -9,7 +8,7 @@ def ref_build            = params.genome ?: 'hg38'
 def ref_base             = params.ref_base
 def assay_base           = params.assay_base
 def sample_base          = params.sample_base
-def publish_path         = Paths.get(params.publish_base, sample)
+def publish_path         = [params.publish_base.replaceAll(/\/$/, ""), sample].join("/")
 
 assert params.assays[assay].compatible_references.contains(ref_build)
 
