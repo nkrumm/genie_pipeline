@@ -15,7 +15,8 @@ assert params.assays[assay].compatible_references.contains(ref_build)
 
 
 // assay-specific files
-assay_intervals      = Channel.fromPath("${assay_base}/${params.assays[assay].intervals}").collect()
+intervals_100bp      = Channel.fromPath("${assay_base}/${params.assays[assay].intervals_100bp}").collect()
+intervals_10bp       = Channel.fromPath("${assay_base}/${params.assays[assay].intervals_10bp}").collect()
 
 // reference sequence
 ref_fasta            = file("${ref_base}/${params.references[ref_build].fasta}", checkIfExists: true)
@@ -188,7 +189,10 @@ process recalibrate_bases {
 
 
 
-recalibrated_bams_ch.into { haplotype_caller_input; strelka2_input }
+recalibrated_bams_ch.into { 
+    haplotype_caller_input;
+    strelka2_input;
+    qc_bam_input }
 
 process haplotype_caller {
     label 'gatk_haplotype_caller'
@@ -201,7 +205,7 @@ process haplotype_caller {
         path ref_fasta_dict
         path dbsnp
         path dbsnp_index
-        path "intervals/*" from assay_intervals
+        file(intervals) from intervals_100bp
         // path known_indels
         // path known_indels_index
     output:
@@ -214,7 +218,7 @@ process haplotype_caller {
         -R ${ref_fasta} \
         -I ${bam} \
         --dbsnp ${dbsnp} \
-        --intervals intervals/*.bed \
+        --intervals ${intervals} \
         -O ${sample_id}.gatk.g.vcf.gz \
         -ERC GVCF
         """
@@ -225,13 +229,14 @@ process haplotype_caller {
 process strelka2 {
     label 'strelka2'
     tag "${sample_id}"
+    errorStrategy 'ignore'
 
     input:
         tuple sample_id, file(bam), file(bai) from strelka2_input
         path ref_fasta
         path ref_fasta_fai
         path ref_fasta_dict
-        path "intervals/*" from assay_intervals
+        file(intervals) from intervals_100bp
 
     output:
         tuple val(sample_id), file("${sample_id}.strelka.vcf.gz"), file("${sample_id}.strelka.vcf.gz.tbi"), val("strelka") into strelka2_out
@@ -241,7 +246,7 @@ process strelka2 {
         configureStrelkaGermlineWorkflow.py \
             --bam ${bam} \
             --referenceFasta ${ref_fasta} \
-            --exome --callRegions intervals/*.gz \
+            --exome --callRegions ${intervals} \
             --runDir Strelka
 
         python Strelka/runWorkflow.py -m local -j ${task.cpus}
@@ -266,7 +271,7 @@ process genotype_gvcf {
         path ref_fasta_dict
         path dbsnp
         path dbsnp_index
-        path "intervals/*" from assay_intervals
+        file(intervals) from intervals_100bp
 
     output:
         tuple val(sample_id), file("${sample_id}.gatk.vcf.gz"), file("${sample_id}.gatk.vcf.gz.tbi"), val("gatk") into genotype_gvcf_out
@@ -279,7 +284,7 @@ process genotype_gvcf {
         gatk --java-options -Xmx${task.memory.toGiga()}g \
             GenotypeGVCFs \
             -R ${ref_fasta} \
-            --intervals intervals/*.bed \
+            --intervals ${intervals} \
             --dbsnp ${dbsnp} \
             -V ${gvcf} \
             -O ${sample_id}.gatk.vcf.gz
@@ -301,7 +306,7 @@ process normalize_vcf {
         path ref_fasta_dict
     output:
         tuple sample_id, file("${vcf.baseName}.normalized.vcf.gz"), file("${vcf.baseName}.normalized.vcf.gz.tbi"), variant_caller into normalize_vcf_out
-    shell:
+    script:
         """
         bcftools norm ${vcf} --fasta-ref ${ref_fasta} \
             --check-ref=w \
@@ -323,7 +328,7 @@ process annotation {
     label 'annotation'
     tag "${sample_id}"
 
-    publishDir publish_base, overwrite: true
+    publishDir publish_path, overwrite: true
     input:
         tuple val(sample_id), file(vcf), file(ix), val(variant_caller) from normalize_vcf_out
         path snpeff_config from snpeff_config
@@ -333,7 +338,7 @@ process annotation {
     output:
         tuple val(sample_id), file("${sample_id}.${variant_caller}.annotated.vcf"), val(variant_caller) into annotated_vcf_out
 
-    shell:
+    script:
     """
     # basic function annotation (ANN field)
     java -Xmx4g -jar /snpEff/snpEff.jar \
@@ -355,21 +360,75 @@ process annotation {
     """
 }
 
+// QUALITY CONTROL
+
+// split channels
+qc_bam_input.into{
+    mosdepth_qc_ch
+}
+
+process mosdepth {
+    label 'mosdepth'
+    tag "${sample_id}"
+ 
+    input:
+       tuple val(sample_id), file(bam), file(bai) from mosdepth_qc_ch
+       file(intervals) from intervals_10bp
+    output:
+       tuple val(sample_id), file("mosdepth.*") into mosdepth_out
+  
+    memory '4 GB'
+  
+    cpus 4 // per docs, no benefit after 4 threads
+ 
+    script:
+        """
+        export MOSDEPTH_PRECISION=5
+        mosdepth --threads ${task.cpus} --no-per-base --by ${intervals} --fast-mode --threshold 1,10,20,100 --mapq 0  mosdepth.mq0 ${bam}
+        mosdepth --threads ${task.cpus} --no-per-base --by ${intervals} --fast-mode --threshold 1,10,20,100 --mapq 20 mosdepth.mq20 ${bam}
+        """
+}
+
+
+//process multiqc {
+    //label 'multiqc'
+    //tag "${sample_id}"
+    //publishDir publish_path, overwrite: true
+//
+    //input:
+        //tuple val(sample_id), path("mosdepth/*") from mosdepth_out
+    //output:
+        //file "${sample_id}.qcreport.html"
+//
+    //memory '2 GB'
+    //cpus 2
+    //script:
+    //"""
+    //multiqc --filename "${sample_id}.qcreport.html"  mosdepth/
+    //"""
+//
+//}
+
+// END QC
+
 process make_xls {
     label 'annotation'
     tag "${sample_id}"
 
-    publishDir publish_base, overwrite: true
+    publishDir publish_path, overwrite: true
 
     input:
         tuple val(sample_id), file(vcf), val(variant_caller) from annotated_vcf_out
         path config from xls_config
+        tuple val(sample_id), path("mosdepth/*") from mosdepth_out
     output:
         tuple sample_id, file("${sample_id}.${variant_caller}.report.xlsx")
 
     shell:
     """
-    vcf2xlsx.py ${vcf} ${config} ${sample_id}.${variant_caller}.report.xlsx
+    gene_cov_summary.py mosdepth/mosdepth.mq0.thresholds.bed.gz > coverage.csv
+
+    vcf2xlsx.py ${vcf} ${config} coverage.csv ${sample_id}.${variant_caller}.report.xlsx
     """
 }
 //process slivar {

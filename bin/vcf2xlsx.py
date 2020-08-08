@@ -70,7 +70,7 @@ def process_vcf(path):
 
     return df
 
-def write_xls(df, config, out):
+def write_xls(df, coverage_df, config, out):
     
     out_cols = config["fields"].keys()
     nrows, ncols = df[out_cols].shape
@@ -116,6 +116,8 @@ def write_xls(df, config, out):
     # freeze top row + gene columns
     worksheet.freeze_panes(1, 1)
 
+    coverage_df.to_excel(writer, engine='xlsxwriter', sheet_name='Sheet2', index=False)
+
     writer.save()
 
 
@@ -123,12 +125,14 @@ def write_xls(df, config, out):
 app = typer.Typer()
 
 @app.command()
-def main(filename: Path, configpath: Path, outpath: Path):
-    df = process_vcf(filename)
+def main(filename: Path, configpath: Path, coveragepath: Path, outpath: Path):
+    # read data
+    vcf_df = process_vcf(filename)
+    coverage_df = pd.read_csv(str(coveragepath))
 
     config = yaml.load(open(str(configpath)))
     print(config)
-    write_xls(df, config, outpath)
+    write_xls(vcf_df, coverage_df, config, outpath)
 
 
 
