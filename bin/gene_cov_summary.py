@@ -29,7 +29,9 @@ def main(filename: Path, outpath: Path = '/dev/stdout'):
     g["pct_passing_bases"] = g["covered_bp_at_20x"]/g["target_length"]*100
     g["n_failing_bases"] = g["target_length"]-g["covered_bp_at_20x"]
     g = g.reset_index()
-    g[["#chrom", "region", "pct_passing_bases", "n_failing_targets"]].to_csv(str(outpath), index=False)
+    mask = g["pct_passing_bases"] < 100
+    cols = ["#chrom", "region", "pct_passing_bases", "n_failing_targets"]
+    g[mask][cols].to_csv(str(outpath), index=False)
 
 
 if __name__ == "__main__":
