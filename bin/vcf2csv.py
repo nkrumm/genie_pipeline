@@ -9,7 +9,6 @@ import pandas as pd
 import typer
 from pathlib import Path
 
-
 MAX_ANN_TO_KEEP = 100
 ANN_FIELDS = ["ANN_Allele", "ANN_Annotation", "ANN_Annotation_Impact", "ANN_Gene_Name", "ANN_Gene_ID", 
               "ANN_Feature_Type", "ANN_Feature_ID", "ANN_Transcript_BioType", "ANN_Rank", 
@@ -18,10 +17,10 @@ ANN_FIELDS = ["ANN_Allele", "ANN_Annotation", "ANN_Annotation_Impact", "ANN_Gene
 ANN_FIELDS_TO_KEEP = ["ANN_Annotation", "ANN_Annotation_Impact", "ANN_Gene_Name", "ANN_Feature_ID", 
                       "ANN_Gene_ID", "ANN_HGVS_c", "ANN_HGVS_p"]
 
+
 def process_vcf(path):
     # read VCF file; note that the `numbers={'ANN': 100}` means we read in max 100 ANNotations for each variant
     path_str = str(path)
-    print(path_str)
     df = allel.vcf_to_dataframe(path_str, fields=['*'], alt_number=1, numbers={'ANN': MAX_ANN_TO_KEEP},
         fills={'cpdx_AC': 0})
     # read in sample GT/AD data
@@ -70,71 +69,12 @@ def process_vcf(path):
 
     return df
 
-def write_xls(df, coverage_df, config, out):
-    
-    out_cols = config["fields"].keys()
-    nrows, ncols = df[out_cols].shape
-
-    # set up xls file
-    writer = pd.ExcelWriter(str(out), engine='xlsxwriter')
-    
-    # TODO: parametrize these
-    df_styled = df[out_cols].style\
-    .apply(lambda x: ['background-color: #B0C4DE' if x.primary == False else '' for i in x], axis=1)\
-    .apply(lambda x: ['number-format: #,##0']*len(x), subset=['POS'], axis=0)\
-    .apply(lambda x: ['number-format: 0; text-align: center']*len(x), subset=['QUAL'], axis=0)\
-    .apply(lambda x: ['text-align: center']*len(x), subset=['AD', 'GT', 'AB'], axis=0)\
-    .apply(lambda x: x.map({True: 'background-color: red', False: ''}), subset=['clinvar_rev_flag'], axis=0)
-
-    # write main table
-    df_styled.to_excel(writer, engine='xlsxwriter', sheet_name='Sheet1', index=False)
-
-    workbook  = writer.book
-    worksheet = writer.sheets['Sheet1']
-    header_format = workbook.add_format(config["header"]["format"])
-
-    # set col width + name
-    for ix, col in enumerate(out_cols):
-        specs = config["fields"].get(col, None)
-        if specs is None:
-            specs = {}
-
-        col_name = specs.get('name', col)
-        col_width = specs.get('width', 10)
-
-        # format the column
-        worksheet.set_column(ix, ix, col_width)
-        # format/rename the header row
-        worksheet.write(0, ix, col_name, header_format)
-
-
-    # set row height of header
-    worksheet.set_row(0, 30)
-
-    # add a filter for all columns
-    worksheet.autofilter(0, 0, nrows, ncols-1)
-    # freeze top row + gene columns
-    worksheet.freeze_panes(1, 1)
-
-    coverage_df.to_excel(writer, engine='xlsxwriter', sheet_name='Sheet2', index=False)
-
-    writer.save()
-
-
 
 app = typer.Typer()
 
 @app.command()
-def main(filename: Path, configpath: Path, coveragepath: Path, outpath: Path):
-    # read data
-    vcf_df = process_vcf(filename)
-    coverage_df = pd.read_csv(str(coveragepath))
-
-    config = yaml.load(open(str(configpath)))
-    print(config)
-    write_xls(vcf_df, coverage_df, config, outpath)
-
-
+def main(in_vcf: Path, out: Path = '/dev/stdout'):
+    process_vcf(in_vcf).to_csv(out, sep=",", index=False)
 
 
 if __name__ == "__main__":

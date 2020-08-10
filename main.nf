@@ -425,9 +425,16 @@ process make_xls {
 
     shell:
     """
-    gene_cov_summary.py mosdepth/mosdepth.mq0.thresholds.bed.gz > coverage.csv
 
-    vcf2xlsx.py ${vcf} ${config} coverage.csv ${sample_id}.${variant_caller}.report.xlsx
+    coverage_summary.py mosdepth/mosdepth.mq0.thresholds.bed.gz > coverage.csv
+
+    vcf2csv.py ${vcf} > variants.csv
+
+    xlsx_report.py \
+        --variants variants.csv \
+        --config ${config} \
+        --coverage coverage.csv \
+        --out "${sample_id}.${variant_caller}.report.xlsx"
     """
 }
 //process slivar {
