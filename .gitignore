@@ -1,0 +1,11 @@
+.nextflow*
+.DS_Store
+.ipynb_checkpoints/
+assay_data/
+config/
+genie.sublime-project
+genie.sublime-workspace
+publish/
+reference_data/
+test_data/
+work/
