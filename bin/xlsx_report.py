@@ -1,11 +1,47 @@
 #!/usr/bin/env python3
 
 import yaml
+import json
+import datetime
 import pandas as pd
 
 # cli tool dependencies
 import typer
 from pathlib import Path
+
+def info_sheet(data, sheet_name, writer):
+    workbook  = writer.book
+    worksheet =  workbook.add_worksheet(sheet_name)
+    header = workbook.add_format({'bold': True, 'font_size': 20})
+    row_ix = 0
+    worksheet.merge_range(row_ix, 0, row_ix, 1, "UW Clinical Exome Variant Report: %s" % data["samples"], header)
+    row_ix += 1
+    worksheet.write(row_ix, 0, "Started at")
+    worksheet.write(row_ix, 1, data["started_at"])
+    row_ix += 1
+    worksheet.write(row_ix, 0, "Generated at")
+    worksheet.write(row_ix, 1, datetime.datetime.now().strftime("%b %d, %Y at %H:%M"))
+    row_ix += 1
+    worksheet.write(row_ix, 0, "Pipeline version")
+    worksheet.write(row_ix, 1, data["pipeline_version"])
+    row_ix += 1
+    worksheet.write(row_ix, 0, "Nextflow hash")
+    worksheet.write(row_ix, 1, f"{data['nextflow_script_id']}")
+    row_ix += 1
+    worksheet.write(row_ix, 0, "Nextflow version")
+    worksheet.write(row_ix, 1, f"{data['nextflow_version']['major']}.{data['nextflow_version']['minor']}.{data['nextflow_version']['patch']}")
+    row_ix += 2
+    worksheet.write(row_ix, 0, "Input VCF")
+    worksheet.write(row_ix, 1, data["input_vcf"])
+    row_ix += 2
+    worksheet.write(row_ix, 0, "Samples Included")
+    worksheet.write(row_ix, 1, data["samples"])
+    
+    worksheet.set_column(0, 0, 20)
+    worksheet.set_column(1, 1, 100)
+
+    return writer
+
 
 def snv_sheet(df, sheet_name, writer, config):
     out_cols = config["fields"].keys()
@@ -61,11 +97,19 @@ app = typer.Typer()
 @app.command()
 def main(variants: Path = typer.Option(...), 
          config: Path = typer.Option(...), 
+         info: Path = None,
          coverage: Path = None, 
          out: Path = '/dev/stdout'):
 
     # set up xls file
     writer = pd.ExcelWriter(str(out), engine='xlsxwriter')
+
+    if info:
+        writer = info_sheet(
+            data = json.load(open(info)),
+            sheet_name = "Info",
+            writer = writer
+        )
     
     writer = snv_sheet(
         df = pd.read_csv(str(variants)),

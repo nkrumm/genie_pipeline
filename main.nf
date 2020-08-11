@@ -1,3 +1,4 @@
+import groovy.json.JsonOutput
 
 // parameters; default is for test data
 def sample               = params.sample_id ?: "20-90206-1"
@@ -413,29 +414,42 @@ process mosdepth {
 process make_xls {
     label 'annotation'
     tag "${sample_id}"
-
+    echo true
     publishDir publish_path, overwrite: true
 
     input:
         tuple val(sample_id), file(vcf), val(variant_caller) from annotated_vcf_out
         path config from xls_config
         tuple val(sample_id), path("mosdepth/*") from mosdepth_out
+
     output:
         tuple sample_id, file("${sample_id}.${variant_caller}.report.xlsx")
 
-    shell:
-    """
+    script:
+        info_json = groovy.json.JsonOutput.toJson([
+            input_vcf: vcf.toString(),
+            samples: sample_id,
+            started_at: "", //workflow.start,
+            finished_at: "", // workflow.complete,
+            duration: "", // workflow.duration,
+            pipeline_version: "${workflow.repository} - ${workflow.revision} [${workflow.commitId}]",
+            nextflow_script_id: workflow.scriptId,
+            nextflow_version: workflow.nextflow.version
+        ])
 
-    coverage_summary.py mosdepth/mosdepth.mq0.thresholds.bed.gz > coverage.csv
+        """
+        echo '${info_json}' > info.json
+        coverage_summary.py mosdepth/mosdepth.mq0.thresholds.bed.gz > coverage.csv
 
-    vcf2csv.py ${vcf} > variants.csv
+        vcf2csv.py ${vcf} > variants.csv
 
-    xlsx_report.py \
-        --variants variants.csv \
-        --config ${config} \
-        --coverage coverage.csv \
-        --out "${sample_id}.${variant_caller}.report.xlsx"
-    """
+        xlsx_report.py \
+            --variants variants.csv \
+            --config ${config} \
+            --info info.json \
+            --coverage coverage.csv \
+            --out "${sample_id}.${variant_caller}.report.xlsx"
+        """
 }
 //process slivar {
     // https://github.com/brentp/slivar
