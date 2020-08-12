@@ -155,7 +155,9 @@ process recalibrate_bases {
 
     output:
         tuple sample_id, file("${sample_id}.recalibrated.bam"), file("${sample_id}.recalibrated.bai") into recalibrated_bams_ch
-   
+    
+    publishDir publish_path, overwrite: true
+    
     script:
         
         // carry over NCGL options
@@ -376,6 +378,8 @@ process mosdepth {
        file(intervals) from intervals_10bp
     output:
        tuple val(sample_id), file("mosdepth.*") into mosdepth_out
+    
+    publishDir publish_path, overwrite: true
 
     memory '4 GB'
   
