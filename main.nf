@@ -1,7 +1,7 @@
 import groovy.json.JsonOutput
 
 // parameters; default is for test data
-def sample               = params.sample_id ?: "20-90206-1"
+def sample               = params.sample ?: "20-90206-1"
 def assay                = params.assay ?: 'test_assay'
 def ref_build            = params.genome ?: 'hg38' 
 
@@ -376,7 +376,7 @@ process mosdepth {
        file(intervals) from intervals_10bp
     output:
        tuple val(sample_id), file("mosdepth.*") into mosdepth_out
-  
+
     memory '4 GB'
   
     cpus 4 // per docs, no benefit after 4 threads
