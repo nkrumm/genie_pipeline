@@ -32,6 +32,9 @@ dbsnp_index          = file("${ref_base}/${params.references[ref_build].dbsnpInd
 known_indels         = Channel.fromPath("${ref_base}/${params.references[ref_build].knownIndels}", checkIfExists: true).collect()
 known_indels_index   = Channel.fromPath("${ref_base}/${params.references[ref_build].knownIndelsIndex}", checkIfExists: true).collect()
 
+// CoNIFER files
+conifer_baseline     = file("${assay_base}/${params.assays[assay].coniferBaseline}", checkIfExists: true)
+
 // annotation
 snpeff_db            = Channel.fromPath("${ref_base}/${params.references[ref_build].snpEffDb}").collect()
 snpeff_config        = file("${ref_base}/${params.references[ref_build].snpEffConfig}")
@@ -157,7 +160,7 @@ process recalibrate_bases {
         tuple sample_id, file("${sample_id}.recalibrated.bam"), file("${sample_id}.recalibrated.bai") into recalibrated_bams_ch
     
     publishDir publish_path, overwrite: true
-    
+
     script:
         
         // carry over NCGL options
@@ -362,7 +365,6 @@ process annotation {
     """
 }
 
-// QUALITY CONTROL
 
 // split channels
 qc_bam_input.into{
@@ -378,6 +380,7 @@ process mosdepth {
        file(intervals) from intervals_10bp
     output:
        tuple val(sample_id), file("mosdepth.*") into mosdepth_out
+       tuple val(sample_id), file("mosdepth.mq0.regions.bed.gz") into conifer_input
     
     publishDir publish_path, overwrite: true
 
@@ -390,6 +393,34 @@ process mosdepth {
         export MOSDEPTH_PRECISION=5
         mosdepth --threads ${task.cpus} --no-per-base --by ${intervals} --fast-mode --threshold 1,10,20,100 --mapq 0  mosdepth.mq0 ${bam}
         mosdepth --threads ${task.cpus} --no-per-base --by ${intervals} --fast-mode --threshold 1,10,20,100 --mapq 20 mosdepth.mq20 ${bam}
+        """
+}
+
+
+// CoNIFER
+
+process conifer {
+    label 'conifer'
+    tag "${sample_id}"
+
+    input:
+        tuple val(sample_id), file(mosdepth) from conifer_input
+        file(baseline) from conifer_baseline
+    output:
+        file("${sample_id}.transformed.csv")
+        file("${sample_id}.calls.csv")
+        file("*.png") optional true
+
+    publishDir publish_path, overwrite: true
+
+    memory '4 GB'
+    cpus 2
+    
+    script:
+        """
+        conifer.py transform ${baseline} ${mosdepth} --output ${sample_id}.transformed.csv
+        conifer.py call ${sample_id}.transformed.csv --output ${sample_id}.calls.csv
+        conifer.py plot ${sample_id}.transformed.csv ${sample_id}.calls.csv --prefix="${sample_id}"
         """
 }
 
