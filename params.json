@@ -1,5 +1,6 @@
 {
 	"sample": "20-90206-1",
+	"source_type": "fastq",
 	"assay": "test_assay",
 	"ref_build": "hg38"
 }

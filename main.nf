@@ -4,6 +4,7 @@ import groovy.json.JsonOutput
 def sample               = params.sample ?: "20-90206-1"
 def assay                = params.assay ?: 'test_assay'
 def ref_build            = params.genome ?: 'hg38' 
+def source_filetype      = params.source_filetype ?: 'fastq'
 
 // base paths -- typically defined in config
 def ref_base             = params.ref_base
@@ -47,6 +48,7 @@ xls_config           = file("${assay_base}/${params.assays[assay].xlsConfig}", c
 
 // Print inputs/config
 println("Sample: " + sample)
+println("Source filetype: " + source_filetype)
 println("Assay: " + assay)
 println("Reference: " + ref_build)
 println("Reference Base: " + ref_base)
@@ -55,24 +57,73 @@ println("Sample Base: " + sample_base)
 println('XLS Config: ' + xls_config)
 println('Publish path: ' + publish_path)
 
-Channel.fromPath("${params.sample_base}/${sample}/exome/libraries/**.fastq.gz")
-    .map { fastq -> 
-        def (filename, readgroup_id, library_id, _f1, _f2, sample_id, rest) = fastq.toString().tokenize('/').reverse() // tokenize path
-        return [readgroup_id, fastq]
+if (source_filetype == 'fastq'){
+    Channel.fromPath("${params.sample_base}/${sample}/exome/libraries/**.fastq.gz")
+        .map { fastq -> 
+            def (filename, readgroup_id, library_id, _f1, _f2, sample_id, rest) = fastq.toString().tokenize('/').reverse() // tokenize path
+            return [readgroup_id, fastq]
+        }
+        .groupTuple()
+        .map { readgroup_id, fastqs ->
+            def (filename, _r, library_id, _f1, _f2, sample_id, rest) = fastqs[0].toString().tokenize('/').reverse() // tokenize path
+            def (fcid, lane, barcodes) = readgroup_id.tokenize(".")
+            def config = [
+                sample_id: sample_id,
+                library_id: library_id,
+                readgroup_id: readgroup_id,
+                fcid: fcid, lane: lane, barcodes: barcodes,
+            ]
+            return tuple(readgroup_id, config, fastqs)
+        }
+        .set { mapping_source_fastqs_ch }
+} else {
+    // source is bam
+    Channel.fromPath("${params.sample_base}/${sample}/exome/analyses/**.bam")
+        .set { bam_to_fastqs_ch }
+    
+    process bam_to_fastqs {
+        label 'preprocess'
+        echo true
+        input: 
+            file(bam) from bam_to_fastqs_ch
+        output:
+            file("output/*.fastq.gz") into fastq_group_ch
+        script:
+        """
+        mkdir output
+
+        picard -Xmx${task.memory.toGiga()}g -Djava.io.tmpdir=./ -Dpicard.useLegacyParser=false \
+        SamToFastq \
+            INPUT=${bam} \
+            OUTPUT_PER_RG=TRUE \
+            OUTPUT_DIR=output/ \
+            INCLUDE_NON_PF_READS=TRUE
+
+        gzip output/*.fastq
+        """
     }
-    .groupTuple()
-    .map { readgroup_id, fastqs ->
-        def (filename, _r, library_id, _f1, _f2, sample_id, rest) = fastqs[0].toString().tokenize('/').reverse() // tokenize path
-        def (fcid, lane, barcodes) = readgroup_id.tokenize(".")
-        def config = [
-            sample_id: sample_id,
-            library_id: library_id,
-            readgroup_id: readgroup_id,
-            fcid: fcid, lane: lane, barcodes: barcodes,
-        ]
-        return tuple(readgroup_id, config, fastqs)
-    }
-    .set { mapping_source_fastqs_ch }
+
+    fastq_group_ch.map { fastq -> 
+            // HFFN5AFX2.4.GTAGAGAG-GTAAGGAG_2.fastq
+            def readgroup_id = fastq.toString().split("_")[0]
+            return [readgroup_id, fastq]
+        }
+        .groupTuple()
+        .map { readgroup_id, fastqs ->
+            def (fcid, lane, barcodes) = readgroup_id.tokenize(".")
+            def library_id = sample_id
+            def config = [
+                sample_id: sample_id,
+                library_id: library_id,
+                readgroup_id: readgroup_id,
+                fcid: fcid, lane: lane, barcodes: barcodes,
+            ]
+            return tuple(readgroup_id, config, fastqs)
+        }
+        .set { mapping_source_fastqs_ch }
+
+}
+
 
 
 // alignment of individual read groups (and sort by *queryname*)

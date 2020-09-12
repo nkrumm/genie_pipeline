@@ -5,6 +5,14 @@
             "title": "",
             "type": "string"
         },
+        "source_type": {
+            "default": "fastq",
+            "title": "",
+            "type": "string",
+            "enum": [
+                "fastq", "bam"
+              ]
+        },
         "assay": {
             "default": "test_assay",
             "title": "",
