@@ -95,10 +95,10 @@ if (source_filetype == 'fastq'){
 
         picard -Xmx${task.memory.toGiga()}g -Djava.io.tmpdir=./ -Dpicard.useLegacyParser=false \
         SamToFastq \
-            INPUT=${bam} \
-            OUTPUT_PER_RG=TRUE \
-            OUTPUT_DIR=output/ \
-            INCLUDE_NON_PF_READS=TRUE
+            --INPUT=${bam} \
+            --OUTPUT_PER_RG=TRUE \
+            --OUTPUT_DIR=output/ \
+            --INCLUDE_NON_PF_READS=TRUE
 
         gzip output/*.fastq
         """
