@@ -82,7 +82,7 @@ if (source_filetype == 'fastq'){
         .set { bam_to_fastqs_ch }
     
     process bam_to_fastqs {
-        label 'preprocess'
+        label 'picard'
         echo true
         input: 
             file(bam) from bam_to_fastqs_ch
