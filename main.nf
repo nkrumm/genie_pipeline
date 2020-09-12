@@ -79,6 +79,7 @@ if (source_filetype == 'fastq'){
 } else {
     // source is bam
     Channel.fromPath("${params.sample_base}/${sample}/exome/analyses/**.bam")
+        .toSortedList({a, b -> a.lastModified() <=> b.lastModified()}).flatten().last() // take the most recent bam
         .set { bam_to_fastqs_ch }
     
     process bam_to_fastqs {
