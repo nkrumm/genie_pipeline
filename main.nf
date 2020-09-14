@@ -83,30 +83,30 @@ if (source_filetype == 'fastq'){
         .set { bam_to_fastqs_ch }
     
     process bam_to_fastqs {
-        label 'picard'
+        label 'bamutils'
         echo true
         input: 
             file(bam) from bam_to_fastqs_ch
         output:
             file("output/*.fastq.gz") into fastq_group_ch
-        script:
-        """
+        shell:
+        '''
         mkdir output
+        bam bam2FastQ --in !{bam} --splitRG --outBase split
 
-        picard -Xmx${task.memory.toGiga()}g -Djava.io.tmpdir=./ -Dpicard.useLegacyParser=false \
-        SamToFastq \
-            --INPUT=${bam} \
-            --OUTPUT_PER_RG=TRUE \
-            --OUTPUT_DIR=output/ \
-            --INCLUDE_NON_PF_READS=TRUE
+        READGROUPS=$(bam dumpHeader !{bam} | grep "^@RG" | cut -f2 | cut -f2 -d:)
 
-        gzip output/*.fastq
-        """
+        for RG in $READGROUPS; do
+            cat $(ls split.${RG}*_1.fastq) | gzip > output/${RG}_1.fastq.gz
+            cat $(ls split.${RG}*_2.fastq) | gzip > output/${RG}_2.fastq.gz
+        done
+        '''
     }
 
     fastq_group_ch.map { fastq -> 
             // HFFN5AFX2.4.GTAGAGAG-GTAAGGAG_2.fastq
-            def readgroup_id = fastq.toString().split("_")[0]
+            def (filename, rest) = fastq.toString().tokenize("/").reverse()
+            def readgroup_id = filename.split("_")[0]
             return [readgroup_id, fastq]
         }
         .groupTuple()
