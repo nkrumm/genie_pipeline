@@ -89,10 +89,11 @@ if (source_filetype == 'fastq'){
             file(bam) from bam_to_fastqs_ch
         output:
             file("output/*.fastq.gz") into fastq_group_ch
+            file("log.txt")
         shell:
         '''
         mkdir output
-        bam bam2FastQ --in !{bam} --splitRG --outBase split
+        bam bam2FastQ --in !{bam} --splitRG --outBase split 2> log.txt
 
         READGROUPS=$(bam dumpHeader !{bam} | grep "^@RG" | cut -f2 | cut -f2 -d:)
 
