@@ -108,7 +108,7 @@ if (source_filetype == 'fastq'){
             // HFFN5AFX2.4.GTAGAGAG-GTAAGGAG_2.fastq
             def (filename, rest) = fastq.toString().tokenize("/").reverse()
             def readgroup_id = filename.split("_")[0]
-            return [readgroup_id, fastq]
+            return [readgroup_id, file(fastq)]
         }
         .groupTuple()
         .map { readgroup_id, fastqs ->
@@ -122,6 +122,7 @@ if (source_filetype == 'fastq'){
             ]
             return tuple(readgroup_id, config, fastqs)
         }
+        .view()
         .set { mapping_source_fastqs_ch }
 
 }
