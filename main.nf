@@ -113,9 +113,9 @@ if (source_filetype == 'fastq'){
         .groupTuple()
         .map { readgroup_id, fastqs ->
             def (fcid, lane, barcodes) = readgroup_id.tokenize(".")
-            def library_id = sample_id
+            def library_id = sample
             def config = [
-                sample_id: sample_id,
+                sample_id: sample,
                 library_id: library_id,
                 readgroup_id: readgroup_id,
                 fcid: fcid, lane: lane, barcodes: barcodes,
