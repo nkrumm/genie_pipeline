@@ -104,13 +104,14 @@ if (source_filetype == 'fastq'){
         '''
     }
 
-    fastq_group_ch.map { fastq -> 
+    fastq_group_ch.view().map { fastq -> 
             // HFFN5AFX2.4.GTAGAGAG-GTAAGGAG_2.fastq
             def (filename, rest) = fastq.toString().tokenize("/").reverse()
             def readgroup_id = filename.split("_")[0]
             return [readgroup_id, fastq]
         }
         .groupTuple()
+        .view()
         .map { readgroup_id, fastqs ->
             def (fcid, lane, barcodes) = readgroup_id.tokenize(".")
             def library_id = sample
