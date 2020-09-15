@@ -88,7 +88,7 @@ if (source_filetype == 'fastq'){
         input: 
             file(bam) from bam_to_fastqs_ch
         output:
-            file("output/*.fastq.gz") into fastq_group_ch
+            path("output/*.fastq.gz") into fastq_group_ch
             file("log.txt")
         shell:
         '''
@@ -108,7 +108,7 @@ if (source_filetype == 'fastq'){
             // HFFN5AFX2.4.GTAGAGAG-GTAAGGAG_2.fastq
             def (filename, rest) = fastq.toString().tokenize("/").reverse()
             def readgroup_id = filename.split("_")[0]
-            return [readgroup_id, file(fastq)]
+            return [readgroup_id, fastq]
         }
         .groupTuple()
         .map { readgroup_id, fastqs ->
