@@ -4,7 +4,7 @@ import os
 import glob
 import numpy as np
 import pandas as pd
-from cbs import segment, validate
+import cghcall
 from itertools import cycle
 import matplotlib.pyplot as plt
 import matplotlib
@@ -61,15 +61,6 @@ def get_gene_positions(df):
     d = (df.name != df.name.shift(-1)).astype(int).values
     gene_stop_ixs = d.nonzero()[0]
     return list(zip(gene_start_ixs, gene_stop_ixs))
-
-def get_segments(vals):
-    L = segment(vals, p=0.0001)
-    df = pd.DataFrame()
-    df["start"] = validate(vals, L, p=0.0001, shuffles=1000)
-    df["end"] = df.start.shift(-1) - 1
-    df = df.dropna() # drop last row, which just has last position
-    df["mean"] = df.apply(lambda row: np.mean(vals[int(row.start):int(row.end)]), axis=1)
-    return df
 
 @app.command()
 def baseline(input: Path, output: Path, min_rpkm: float = 5.0):
@@ -128,44 +119,24 @@ def transform(baseline: Path, sample: Path, output: Path = '/dev/stdout',
     # write single transformed sample to new file
     write_df(str(output), out[sample_id], index=True)
 
+
 @app.command()
 def call(sample: Path, output: Path = '/dev/stdout'):
     df = pd.read_csv(sample, compression="infer", sep=",")
     df = df.set_index(["chrom", "start", "end", "name"])
     sample_id = df.columns[0]
-    chromosomes = df.index.get_level_values("chrom").unique()
-    chromosomes = natural_sort((set(chromosomes) & set(VALID_CHROMS)))  
-        #out_f.write("\t".join(["chrom", "start_ix", "stop_ix", "logr_mean", "num_probes", "genomic_start", "genomic_end"]) + "\n")
-    out = []        
-    for CHROM in chromosomes:
-        chr_df = df.loc[CHROM]
-        vals = chr_df[sample_id].values
-        for ix, call in get_segments(vals).iterrows():
-            start_ix = int(call.start)
-            stop_ix = int(call.end)
-            region_df = chr_df.iloc[start_ix:stop_ix].reset_index()
-            genomic_start, genomic_end = region_df["start"].values[0], region_df["end"].values[-1]
-            out.append({
-                "chrom": CHROM,
-                "start_ix": call["start"],
-                "stop_ix": call["end"],
-                "logr_mean": call["mean"],
-                "num_probes": len(region_df),
-                "genomic_start": genomic_start,
-                "genomic_end": genomic_end
-                })
-    out_df = pd.DataFrame(out)
-    write_df(str(output), out_df, index=True)
 
+    cghcall_output = cghcall.make_calls(df, sample_id)
+    calls = cghcall.segment(cghcall_output, sample_id)
+    write_df(str(output), calls, index=True)
 
 
 @app.command()
 def plot(sample: Path, calls: Path, prefix: str = "", window: int = 20, logr_threshold: float = 2):
-    df = pd.read_csv(sample, compression="infer", sep="\t")
+    df = pd.read_csv(sample, compression="infer", sep=",")
     calls_df = pd.read_csv(calls, sep=",")
     sample_id = df.columns[-1]
     y_positions = cycle(np.linspace(-4,-5.75,4))
-
     for ix, call in calls_df.iterrows():
         if abs(call["logr_mean"]) < logr_threshold:
             continue
@@ -173,8 +144,8 @@ def plot(sample: Path, calls: Path, prefix: str = "", window: int = 20, logr_thr
         
         start_ix = int(call["start_ix"])
         stop_ix = int(call["stop_ix"])
-        window_start_ix = start_ix - window
-        window_stop_ix = stop_ix + window
+        window_start_ix = max(start_ix - window, 0)
+        window_stop_ix = min(stop_ix + window, df.shape[0])
         region_df = df[df["chrom"] == call["chrom"]].iloc[window_start_ix:window_stop_ix]
         vals = region_df.sort_values("start").reset_index()[sample_id].values
         
