@@ -7,6 +7,7 @@ import pandas as pd
 import cghcall
 from itertools import cycle
 import matplotlib.pyplot as plt
+import pylab
 import matplotlib
 
 # cli tool dependencies
@@ -138,7 +139,8 @@ def plot(sample: Path, calls: Path, prefix: str = "", window: int = 20, logr_thr
     sample_id = df.columns[-1]
     y_positions = cycle(np.linspace(-4,-5.75,4))
     for ix, call in calls_df.iterrows():
-        if abs(call["logr_mean"]) < logr_threshold:
+        if abs(call["median_svdzrpkm"]) <= logr_threshold:
+            print("skipping")
             continue
         fig, ax = plt.subplots(figsize=(16,6))
         
@@ -155,7 +157,7 @@ def plot(sample: Path, calls: Path, prefix: str = "", window: int = 20, logr_thr
 
         fig, ax = plt.subplots(figsize=(28,7))        
         ax.plot(positions, logr, color='0.5', marker=None, linewidth=1)
-        ax.set_title("%s | %s:%d-%d" % (sample_id, call["chrom"], call["genomic_start"], call["genomic_end"]))
+        ax.set_title("%s | %s:%d-%d" % (sample_id, call["chrom"], call["start"], call["stop"]))
         ax.set_ylim(-6,4)
         # locations
         xtick_locs = np.linspace(0,region_df.shape[0], 10).astype(int)[0:-1]
@@ -170,7 +172,10 @@ def plot(sample: Path, calls: Path, prefix: str = "", window: int = 20, logr_thr
             ax.text(gene_start_ix-0.5,ypos+0.25, gene_name, ha='left',va='center',fontsize=12)
         plt.savefig(f"{prefix}.{str(ix)}.png")
         fig.clf()
-        plt.close()
+        pylab.close(fig)
+        plt.clf()
+        del fig
+        del ax      
 
 if __name__ == "__main__":
     app()

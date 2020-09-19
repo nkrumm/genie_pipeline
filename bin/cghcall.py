@@ -15,6 +15,8 @@ CHR2INT = {"chr%d" % d: d for d in range(1,23)}
 CHR2INT["chrX"] = 23
 CHR2INT["chrY"] = 24
 
+INT2CHR = {v: k for k,v in CHR2INT.items()}
+
 callint2colname = {-2: "p_dloss", -1: "p_loss", 1: "p_gain", 2:"p_amp"}
 
 VALID_CHROMS = ["chr%s" % c for c in range(1,23)] + ["chrX", "chrY"]
@@ -54,8 +56,9 @@ def make_calls(df, sample_id):
                    np.array(cghbase.probgain(t6), dtype=np.float).flatten(),
                    np.array(cghbase.probamp(t6), dtype=np.float).flatten()]).transpose()
 
-    out_df = pd.DataFrame(out,columns=["chromosome","start","stop","svdzrpkm","call","p_dloss","p_loss","p_norm","p_gain","p_amp"])
+    out_df = pd.DataFrame(out,columns=["chrom","start","stop","svdzrpkm","call","p_dloss","p_loss","p_norm","p_gain","p_amp"])
     # post process 
+    out_df["chrom"] = out_df.chrom.apply(lambda c: INT2CHR[c])
     out_df["call"] = np.sign(out_df["call"])
     out_df["p_gain"] = np.maximum(out_df["p_gain"], out_df["p_amp"])
     out_df["p_loss"] = np.maximum(out_df["p_loss"], out_df["p_dloss"])
@@ -80,7 +83,7 @@ def findBreakPoints(x):
 
 def segment(cghcall_output, sample_id):
     c = []
-    for chrom, out in cghcall_output.groupby("chromosome"):
+    for chrom, out in cghcall_output.groupby("chrom"):
         call_states_present = set(out["call"])-set([0])
         for i in call_states_present:
             calls = findBreakPoints(np.array(1 * (out["call"] == i)))
@@ -89,24 +92,24 @@ def segment(cghcall_output, sample_id):
                 svdzrpkm_vals = out.iloc[call[0]:call[1]-1]["svdzrpkm"]
                 start_bp = out.iloc[call[0]]["start"]
                 stop_bp = out.iloc[call[1]-1]["stop"]
-                chromosome_vals = np.unique(out.iloc[call[0]:call[1]-1]["chromosome"])
-                if len(chromosome_vals) == 1:
-                    chromosome = chromosome_vals[0]
+                chrom_vals = np.unique(out.iloc[call[0]:call[1]-1]["chrom"])
+                if len(chrom_vals) == 1:
+                    chrom = chrom_vals[0]
                 else:
-                    print("[ERROR] multiple chromosomes in this call!, Ignoring")
-                    print(chromosome_vals, start_bp, stop_bp, call)
+                    print("[ERROR] multiple chroms in this call!, Ignoring")
+                    print(chrom_vals, start_bp, stop_bp, call)
                     continue
-                start_exon= np.where(out[out["chromosome"]==chromosome]["start"]>=start_bp)[0][0]
-                stop_exon = np.where(out[out["chromosome"]==chromosome]["start"]<=stop_bp)[0][-1]
+                start_ix= np.where(out[out["chrom"]==chrom]["start"]>=start_bp)[0][0]
+                stop_ix = np.where(out[out["chrom"]==chrom]["start"]<=stop_bp)[0][-1]
                 #np.median(prob_vals), np.median(svdzrpkm_vals), np.std(svdzrpkm_vals))
                 t = {"sample_id": sample_id,\
-                     "chromosome":int(chromosome),\
+                     "chrom":str(chrom),\
                      "start":int(start_bp),\
                      "stop":int(stop_bp),\
                      "state":int(i),\
-                     "start_exon":int(start_exon),\
-                     "stop_exon":int(stop_exon),\
-                     "num_probes":int(stop_exon-start_exon+1),\
+                     "start_ix":int(start_ix),\
+                     "stop_ix":int(stop_ix),\
+                     "num_probes":int(stop_ix-start_ix+1),\
                      "size_bp":int(stop_bp - start_bp),\
                      "probability": np.median(prob_vals),
                      "median_svdzrpkm": np.median(svdzrpkm_vals),
